@@ -1,0 +1,9 @@
+{
+  "name": "envirotech-mail-proxy",
+  "version": "1.0.0",
+  "description": "Stateless Gmail SMTP proxy for Envirotech ERP — deployed on Vercel",
+  "main": "api/send-email.js",
+  "dependencies": {
+    "nodemailer": "^6.9.9"
+  }
+}
