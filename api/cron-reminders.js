@@ -39,46 +39,55 @@ module.exports = async (req, res) => {
       return res.status(200).send('No pending reminders for today.');
     }
 
-    // 2. Fetch Admin Emails
-    const adminsUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/admins?key=${API_KEY}`;
+    // 2. Fetch Admin Emails from 'users' collection
+    const adminsUrl = `https://firestore.googleapis.com/v1/projects/${PROJECT_ID}/databases/(default)/documents/users?key=${API_KEY}`;
     const adminsResp = await fetch(adminsUrl);
     const adminsData = await adminsResp.json();
     
-    const adminEmails = adminsData.documents 
-      ? adminsData.documents.map(doc => doc.fields.email.stringValue)
-      : [GMAIL_USER];
+    let adminEmails = [GMAIL_USER];
+    if (adminsData.documents) {
+      const filtered = adminsData.documents.filter(doc => {
+        return doc.fields.role && doc.fields.role.stringValue === 'admin' && 
+               doc.fields.isActive && doc.fields.isActive.booleanValue === true;
+      });
+      if (filtered.length > 0) {
+        adminEmails = filtered.map(doc => doc.fields.email.stringValue);
+      }
+    }
 
-    // 3. Construct Email Content
+    // 3. Construct Premium Email Content
     let reminderListHtml = '';
     todaysReminders.forEach(doc => {
       const f = doc.fields;
       reminderListHtml += `
-        <div style="padding: 10px; border-bottom: 1px solid #eee;">
-          <strong style="color: #2563eb;">${f.reminderType ? f.reminderType.stringValue : 'Task'}</strong><br/>
-          <span style="font-size: 14px; color: #4b5563;">
-            Customer: ${f.customer_name ? f.customer_name.stringValue : 'N/A'}<br/>
-            Note: ${f.escalationNotes ? f.escalationNotes.stringValue : 'N/A'}
-          </span>
+        <div style="background-color: #f8fafc; padding: 16px; border-radius: 8px; margin-bottom: 12px; border: 1px solid #e2e8f0;">
+          <div style="color: #3b82f6; font-size: 11px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px;">${f.reminderType ? f.reminderType.stringValue : 'Task'}</div>
+          <div style="color: #0f172a; font-weight: bold; font-size: 15px; margin-bottom: 4px;">${f.customer_name ? f.customer_name.stringValue : 'General Inquiry'}</div>
+          <div style="color: #64748b; font-size: 13px; line-height: 1.4;">${f.escalationNotes ? f.escalationNotes.stringValue : 'No additional notes.'}</div>
         </div>
       `;
     });
 
     const emailHtml = `
-      <div style="font-family: sans-serif; max-width: 600px; margin: auto; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden;">
-        <div style="background-color: #0f172a; color: white; padding: 20px; text-align: center;">
-          <h1 style="margin: 0; font-size: 20px;">Daily System Briefing</h1>
-          <p style="margin: 5px 0 0; font-size: 14px; opacity: 0.8;">Envirotech ERP Reminders</p>
+      <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; max-width: 600px; margin: auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden; background-color: #ffffff;">
+        <div style="background-color: #0f172a; padding: 32px; text-align: center;">
+          <h2 style="color: #ffffff; margin: 0; letter-spacing: 1px; font-size: 22px;">DAILY TASK BRIEFING</h2>
+          <p style="color: #3b82f6; margin: 8px 0 0 0; font-size: 12px; text-transform: uppercase; font-weight: bold; letter-spacing: 2px;">Envirotech ERP</p>
         </div>
-        <div style="padding: 20px;">
-          <p>Hello Team,</p>
-          <p>You have <strong>${todaysReminders.length}</strong> tasks scheduled for today:</p>
-          ${reminderListHtml}
-          <div style="margin-top: 25px; text-align: center;">
-            <a href="https://envirotech-sys-2026.web.app" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">Open Dashboard</a>
+        <div style="padding: 32px; color: #1e293b;">
+          <p style="font-size: 16px; margin-top: 0;">Good morning Team,</p>
+          <p style="color: #64748b; line-height: 1.6;">You have <strong>${todaysReminders.length}</strong> critical tasks scheduled for today, ${new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long' })}.</p>
+          
+          <div style="margin: 24px 0;">
+            ${reminderListHtml}
+          </div>
+          
+          <div style="text-align: center; margin-top: 32px;">
+            <a href="https://envirotech-sys-2026.web.app" style="background-color: #3b82f6; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.5);">Open Task Manager</a>
           </div>
         </div>
-        <div style="background-color: #f9fafb; padding: 15px; text-align: center; font-size: 12px; color: #9ca3af;">
-          Automated System Notification • Envirotech Systems
+        <div style="background-color: #f1f5f9; padding: 20px; text-align: center; color: #94a3b8; font-size: 11px;">
+          This is an automated daily briefing from Envirotech ERP.<br/>Scheduled for delivery between 4:00 AM - 8:00 AM IST.
         </div>
       </div>
     `;
@@ -90,9 +99,9 @@ module.exports = async (req, res) => {
     });
 
     await transporter.sendMail({
-      from: `"Envirotech System" <${GMAIL_USER}>`,
+      from: `"Envirotech Briefing" <${GMAIL_USER}>`,
       to: adminEmails.join(','),
-      subject: `[ACTION REQUIRED] Today's Tasks: ${todaysReminders.length} Reminders`,
+      subject: `🕒 [BRIEFING] ${todaysReminders.length} Tasks for Today`,
       html: emailHtml
     });
 
